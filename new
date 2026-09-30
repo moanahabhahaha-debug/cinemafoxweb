@@ -1,0 +1,94 @@
+from pathlib import Path
+
+ROOT = Path("subtitles")
+
+
+def convert_srt_to_vtt(text):
+    text = text.lstrip("\ufeff")
+    text = text.replace("\r\n", "\n")
+    text = text.replace("\r", "\n")
+    text = text.replace(",", ".")
+    
+    return "WEBVTT\n\n" + text.strip() + "\n"
+
+
+def read_srt(path):
+    encodings = [
+        "utf-8-sig",
+        "utf-8",
+        "cp949",
+        "euc-kr",
+        "cp1256"
+    ]
+
+    for encoding in encodings:
+        try:
+            return path.read_text(encoding=encoding)
+        except UnicodeDecodeError:
+            continue
+
+    raise UnicodeDecodeError(
+        "unknown",
+        b"",
+        0,
+        1,
+        "تعذر قراءة الملف"
+    )
+
+
+def main():
+
+    if not ROOT.exists():
+        print("❌ مجلد subtitles غير موجود")
+        return
+
+    converted = 0
+    skipped = 0
+    failed = 0
+
+    for srt_file in ROOT.rglob("*.srt"):
+
+        try:
+
+            # قراءة SRT
+            srt_text = read_srt(srt_file)
+
+            # إنشاء VTT بنفس المكان
+            vtt_file = srt_file.with_suffix(".vtt")
+
+            # تحويل وحفظ
+            vtt_file.write_text(
+                convert_srt_to_vtt(srt_text),
+                encoding="utf-8"
+            )
+
+            converted += 1
+
+            print(
+                f"✅ {srt_file} → {vtt_file}"
+            )
+
+        except Exception as e:
+
+            failed += 1
+
+            print(
+                f"❌ فشل: {srt_file}"
+            )
+
+            print(
+                f"   {e}"
+            )
+
+    print()
+    print("================================")
+    print("          انتهى التحويل")
+    print("================================")
+    print(f"تم التحويل : {converted}")
+    print(f"تم التخطي  : {skipped}")
+    print(f"فشل        : {failed}")
+    print("================================")
+
+
+if __name__ == "__main__":
+    main()
