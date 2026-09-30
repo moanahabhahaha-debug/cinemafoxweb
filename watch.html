@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -1258,18 +1257,13 @@
             }
 
             /*
-             * مهم:
-             * لا نرسل رابط GitHub مباشرة للمتصفح.
-             *
-             * المتصفح يطلب Vercel:
-             *
-             * /api/subtitle?url=...
-             *
-             * وVercel هو الذي يجلب ملف VTT من GitHub.
+             * GitHub → Vercel Proxy
+             * الموقع مستضاف على GitHub Pages
+             * وVercel يتولى جلب ملف VTT
              */
 
             return (
-                "/api/subtitle?url=" +
+                "https://cinamafox.vercel.app/api/subtitle?url=" +
                 encodeURIComponent(originalUrl)
             );
         }
@@ -1552,4 +1546,3 @@
 
 </body>
 </html>
-```
