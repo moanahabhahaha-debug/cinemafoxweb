@@ -1168,7 +1168,9 @@
 
            GitHub Release
                 ↓
-           VTT مباشرة
+           Vercel Proxy
+                ↓
+           VTT
            ===================================================== */
 
         function getSubtitleUrl() {
@@ -1255,10 +1257,15 @@
             }
 
             /*
-             * GitHub Release → VTT مباشرة
+             * GitHub → Vercel Proxy
+             * الموقع مستضاف على GitHub Pages
+             * وVercel يتولى جلب ملف VTT
              */
 
-            return originalUrl;
+            return (
+                "https://cinamafox.vercel.app/api/subtitle?url=" +
+                encodeURIComponent(originalUrl)
+            );
         }
 
 
@@ -1280,7 +1287,7 @@
             }
 
             console.log(
-                "🎬 رابط الترجمة عبر GitHub:",
+                "🎬 رابط الترجمة عبر Proxy:",
                 subtitleUrl
             );
 
@@ -1422,3 +1429,120 @@
                 result.push({
                     start: start,
                     end: end,
+                    text: subtitleText
+                });
+            }
+
+            return result;
+        }
+
+
+        function vttTimeToSeconds(time) {
+
+            time =
+                time.replace(',', '.');
+
+            const parts =
+                time.split(':');
+
+            if (parts.length === 2) {
+
+                const minutes =
+                    parseFloat(parts[0]);
+
+                const seconds =
+                    parseFloat(parts[1]);
+
+                return (
+                    minutes * 60 +
+                    seconds
+                );
+            }
+
+            if (parts.length === 3) {
+
+                const hours =
+                    parseFloat(parts[0]);
+
+                const minutes =
+                    parseFloat(parts[1]);
+
+                const seconds =
+                    parseFloat(parts[2]);
+
+                return (
+                    hours * 3600 +
+                    minutes * 60 +
+                    seconds
+                );
+            }
+
+            return NaN;
+        }
+
+
+        function updateCinemaFoxSubtitle() {
+
+            if (
+                !subtitleItems.length ||
+                !isFinite(video.currentTime)
+            ) {
+
+                subtitleBox.innerText = "";
+                subtitleBox.style.display = "none";
+
+                return;
+            }
+
+            const currentTime =
+                video.currentTime;
+
+            let activeSubtitle = null;
+
+            for (
+                let i = 0;
+                i < subtitleItems.length;
+                i++
+            ) {
+
+                const item =
+                    subtitleItems[i];
+
+                if (
+                    currentTime >= item.start &&
+                    currentTime <= item.end
+                ) {
+
+                    activeSubtitle = item;
+                    break;
+                }
+
+                if (
+                    item.start > currentTime
+                ) {
+
+                    break;
+                }
+            }
+
+            if (activeSubtitle) {
+
+                subtitleBox.innerText =
+                    activeSubtitle.text;
+
+                subtitleBox.style.display =
+                    "block";
+
+            } else {
+
+                subtitleBox.innerText = "";
+
+                subtitleBox.style.display =
+                    "none";
+            }
+        }
+
+    </script>
+
+</body>
+</html>
