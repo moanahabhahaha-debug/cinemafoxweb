@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -1257,15 +1258,45 @@
             }
 
             /*
-             * GitHub → Vercel Proxy
-             * الموقع مستضاف على GitHub Pages
-             * وVercel يتولى جلب ملف VTT
+             * GitHub Pages لا يشغّل API / Proxy.
+             * لذلك نحول رابط GitHub Release إلى
+             * ملف VTT محفوظ داخل مستودع GitHub نفسه.
              */
 
-            return (
-                "https://cinamafox.vercel.app/api/subtitle?url=" +
-                encodeURIComponent(originalUrl)
-            );
+            try {
+
+                const url = new URL(originalUrl);
+                const parts = url.pathname.split("/");
+                const downloadIndex = parts.indexOf("download");
+
+                if (
+                    downloadIndex !== -1 &&
+                    parts.length > downloadIndex + 2
+                ) {
+
+                    const releaseTag =
+                        parts[downloadIndex + 1];
+
+                    const fileName =
+                        parts.slice(downloadIndex + 2).join("/");
+
+                    return (
+                        "https://raw.githubusercontent.com/moanahabhahaha-debug/new4/main/subtitles/" +
+                        encodeURIComponent(releaseTag) +
+                        "/" +
+                        fileName
+                    );
+                }
+
+            } catch (e) {
+
+                console.error(
+                    "Subtitle URL Error:",
+                    e
+                );
+            }
+
+            return null;
         }
 
 
@@ -1287,7 +1318,7 @@
             }
 
             console.log(
-                "🎬 رابط الترجمة عبر Proxy:",
+                "🎬 رابط الترجمة من GitHub:",
                 subtitleUrl
             );
 
@@ -1546,3 +1577,4 @@
 
 </body>
 </html>
+```
