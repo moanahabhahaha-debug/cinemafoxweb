@@ -1,51 +1,1542 @@
-function getSubtitleUrl() {
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CINEMA FOX</title>
 
-    if (!currentDramaData) return null;
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 
-    const drama = subtitlesData.dramas.find(
-        item =>
-            String(item.id).toLowerCase() ===
-            String(dramaId).toLowerCase()
-    );
+    <style>
+        * {
+            box-sizing: border-box;
+        }
 
-    if (!drama) return null;
+        body {
+            background-color: #2b0509;
+            color: #ffffff;
+            font-family: Tahoma, sans-serif;
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
 
-    const season = drama.seasons?.[currentSeasonKey];
+        .top-bar {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
 
-    if (!season) return null;
+        .btn {
+            background-color: #8b0000;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            transition: 0.3s;
+        }
 
-    const originalUrl =
-        season.episodes?.[String(currentEpNum)];
+        .btn:hover { background-color: #a91111; }
 
-    if (!originalUrl) return null;
+        .logo-container {
+            width: 100%;
+            max-width: 220px;
+            margin: 0 auto 5px auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
 
-    try {
+        .logo-container img {
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+            filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
+        }
 
-        const url = new URL(originalUrl);
-        const parts = url.pathname.split("/");
-        const downloadIndex = parts.indexOf("download");
+        h1 {
+            margin: 0 0 10px 0;
+            color: #ffcccc;
+            font-size: 18px;
+            text-align: center;
+        }
 
-        if (downloadIndex !== -1) {
+        #videoContainer {
+            position: relative;
+            width: 100%;
+            max-width: 900px;
+            aspect-ratio: 16/9;
+            background-color: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+        }
 
-            const releaseTag =
-                parts[downloadIndex + 1];
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            outline: none;
+            flex-grow: 1;
+        }
 
-            const fileName =
-                parts.slice(downloadIndex + 2).join("/");
+        #loadingOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        .spinner-container {
+            position: relative;
+            width: 70px;
+            height: 70px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .spinner {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><circle cx="100" cy="100" r="70" fill="none" stroke="%23ff0033" stroke-width="18" stroke-linecap="round" stroke-dasharray="440" stroke-dashoffset="110"/></svg>');
+            background-repeat: no-repeat;
+            background-size: contain;
+            animation: spin 1s linear infinite;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));
+        }
+
+        .loading-percent {
+            position: absolute;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: bold;
+            font-family: Tahoma, sans-serif;
+            direction: ltr;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .custom-video-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: linear-gradient(to top, rgba(26,0,2,0.95), rgba(26,0,2,0.6));
+            display: flex;
+            flex-direction: column;
+            padding: 8px 12px;
+            gap: 6px;
+            z-index: 15;
+        }
+
+        .progress-container {
+            width: 100%;
+            background: #4a0005;
+            height: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            position: relative;
+            direction: ltr;
+        }
+
+        .progress-bar {
+            background: #ff0033;
+            height: 100%;
+            width: 0%;
+            border-radius: 3px;
+        }
+
+        .controls-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: white;
+            font-size: 13px;
+        }
+
+        .controls-right, .controls-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ctrl-btn {
+            background: #8b0000;
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+        }
+
+        .ctrl-btn:hover {
+            background: #a91111;
+        }
+
+        .time-display {
+            background: rgba(139, 0, 0, 0.4);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            direction: ltr;
+        }
+
+        .settings-wrapper {
+            position: relative;
+        }
+
+        .quality-menu {
+            position: absolute;
+            bottom: 38px;
+            right: 0;
+            background: #1a0002;
+            border: 1px solid #8b0000;
+            border-radius: 6px;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            z-index: 20;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            min-width: 110px;
+        }
+
+        .quality-menu.active {
+            display: flex;
+        }
+
+        .quality-option {
+            background: none;
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            text-align: right;
+            cursor: pointer;
+            font-size: 13px;
+            transition: 0.2s;
+        }
+
+        .quality-option:hover, .quality-option.selected {
+            background: #8b0000;
+        }
+
+        .controls-panel {
+            width: 100%;
+            max-width: 900px;
+            background: rgba(40, 0, 5, 0.85);
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+        }
+
+        .select-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            flex-grow: 1;
+        }
+
+        select {
+            background-color: #1a0002;
+            color: white;
+            border: 1px solid #8b0000;
+            padding: 8px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            flex-grow: 1;
+        }
+
+        .settings-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .info {
+            margin-top: 2px;
+            margin-bottom: 10px;
+            text-align: center;
+            color: #ffcccc;
+            font-size: 13px;
+        }
+
+        #cinemaFoxSubtitle {
+            position: absolute;
+            left: 5%;
+            right: 5%;
+            bottom: 70px;
+            z-index: 14;
+            color: #ffffff;
+            text-align: center;
+            font-family: Tahoma, Arial, sans-serif;
+            font-size: clamp(16px, 2.2vw, 27px);
+            font-weight: bold;
+            line-height: 1.45;
+            text-shadow:
+                2px 2px 3px #000,
+                -2px -2px 3px #000,
+                2px -2px 3px #000,
+                -2px 2px 3px #000;
+            pointer-events: none;
+            direction: rtl;
+            display: none;
+            padding: 0 10px;
+            white-space: pre-line;
+        }
+
+        @media (max-width: 600px) {
+            body { padding: 5px; }
+            .logo-container { max-width: 160px; }
+            h1 { font-size: 15px; }
+            .btn { padding: 6px 10px; font-size: 12px; }
+            .ctrl-btn { padding: 5px 8px; }
+            .controls-row { font-size: 11px; }
+            .controls-right, .controls-left { gap: 5px; }
+            .time-display { font-size: 10px; padding: 3px 5px; }
+            .controls-panel { flex-direction: column; align-items: stretch; }
+            .select-group { width: 100%; }
+            select { width: 100%; }
+            .settings-group { width: 100%; justify-content: center; }
+            .settings-group .btn { width: 100%; }
+
+            #cinemaFoxSubtitle {
+                bottom: 55px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="top-bar">
+        <button class="btn" onclick="goHome()">العودة الى الصفحه الرئيسية</button>
+    </div>
+
+    <div class="logo-container">
+        <img src="logo_cinemafox.png" alt="CINEMA FOX">
+    </div>
+
+    <h1 id="dramaTitle">جاري التحميل...</h1>
+
+    <div class="info" id="mediaInfo">
+        جاري تحميل المشغل...
+    </div>
+
+    <div id="videoContainer" onclick="handleVideoContainerClick(event)">
+
+        <div id="loadingOverlay">
+            <div class="spinner-container">
+                <div class="spinner"></div>
+                <div class="loading-percent" id="loadingPercent">0%</div>
+            </div>
+        </div>
+
+        <video id="videoPlayer" playsinline webkit-playsinline></video>
+
+        <div id="cinemaFoxSubtitle"></div>
+
+        <div class="custom-video-controls" onclick="event.stopPropagation()">
+
+            <div class="progress-container" id="progressContainer" onclick="seekVideo(event)">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+
+            <div class="controls-row">
+
+                <div class="controls-right">
+
+                    <button class="ctrl-btn" id="playPauseBtn" onclick="togglePlay()" title="تشغيل / إيقاف">
+                        <svg id="playPauseIcon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                            <polygon id="playPolygon"
+                                points="6,4 10,4 10,20 6,20 14,4 18,4 18,20 14,20" />
+                        </svg>
+                    </button>
+
+                    <button class="ctrl-btn" onclick="toggleMute()" title="كتم / إلغاء الكتم">🔊</button>
+
+                    <span class="time-display" id="timeDisplay">
+                        0:00 / 0:00
+                    </span>
+
+                </div>
+
+                <div class="controls-left">
+
+                    <div class="settings-wrapper">
+
+                        <button class="ctrl-btn"
+                            onclick="toggleQualityMenu(event)"
+                            title="الإعدادات والجودة">
+                            ⚙️
+                        </button>
+
+                        <div class="quality-menu" id="qualityMenu">
+
+                            <button class="quality-option selected"
+                                onclick="setQuality('auto', this)">
+                                تلقائي
+                            </button>
+
+                            <button class="quality-option"
+                                onclick="setQuality('2160', this)">
+                                4K (2160p)
+                            </button>
+
+                            <button class="quality-option"
+                                onclick="setQuality('1080', this)">
+                                1080p
+                            </button>
+
+                            <button class="quality-option"
+                                onclick="setQuality('410', this)">
+                                410p
+                            </button>
+
+                            <button class="quality-option"
+                                onclick="setQuality('360', this)">
+                                360p
+                            </button>
+
+                            <button class="quality-option"
+                                onclick="setQuality('180', this)">
+                                180p
+                            </button>
+
+                        </div>
+                    </div>
+
+                    <button class="ctrl-btn"
+                        onclick="toggleFullscreen()"
+                        title="ملء الشاشة">
+
+                        <svg viewBox="0 0 24 24"
+                            width="16"
+                            height="16"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2.5">
+
+                            <rect x="3"
+                                y="3"
+                                width="18"
+                                height="18"
+                                rx="2" />
+
+                        </svg>
+
+                    </button>
+
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="controls-panel">
+
+        <div class="select-group">
+
+            <select id="seasonSelect"
+                onchange="changeSeason()">
+            </select>
+
+            <select id="episodeSelect"
+                onchange="changeEpisode()">
+            </select>
+
+        </div>
+
+        <div class="settings-group">
+
+            <button
+                class="btn"
+                style="background-color: #b30000;"
+                id="nextEpBtn"
+                onclick="nextEpisode()">
+
+                الحلقة التالية ➡️
+
+            </button>
+
+        </div>
+
+    </div>
+
+    <script src="cinemafox.js"></script>
+    <script src="ab.js"></script>
+
+    <script>
+
+        const urlParams = new URLSearchParams(window.location.search);
+
+        const dramaId = urlParams.get('id') || 'vincenzo';
+        let currentSeasonKey = urlParams.get('s') || 'season_1';
+        let currentEpNum = urlParams.get('ep') || '1';
+
+        const video = document.getElementById('videoPlayer');
+        const mediaInfo = document.getElementById('mediaInfo');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingPercent = document.getElementById('loadingPercent');
+        const playPolygon = document.getElementById('playPolygon');
+        const progressBar = document.getElementById('progressBar');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const qualityMenu = document.getElementById('qualityMenu');
+        const subtitleBox = document.getElementById('cinemaFoxSubtitle');
+
+        let currentDramaData = null;
+        let hlsInstance = null;
+        let percentInterval = null;
+
+        let subtitleItems = [];
+        let subtitleRequestId = 0;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initPlayer();
+        });
+
+        window.addEventListener('click', (e) => {
+            if (!e.target.closest('.settings-wrapper')) {
+                qualityMenu.classList.remove('active');
+            }
+        });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'KeyK') {
+                e.preventDefault();
+                togglePlay();
+            }
+        });
+
+        function toggleQualityMenu(e) {
+            e.stopPropagation();
+            qualityMenu.classList.toggle('active');
+        }
+
+        function showLoading() {
+
+            loadingOverlay.style.display = 'flex';
+            loadingOverlay.style.opacity = '1';
+
+            if (!percentInterval) {
+
+                let currentVal = 5;
+
+                loadingPercent.innerText = currentVal + "%";
+
+                percentInterval = setInterval(() => {
+
+                    if (currentVal < 92) {
+
+                        currentVal += Math.floor(Math.random() * 8) + 2;
+
+                        if (currentVal > 92)
+                            currentVal = 92;
+
+                        loadingPercent.innerText = currentVal + "%";
+                    }
+
+                }, 180);
+            }
+        }
+
+        function hideLoading() {
+
+            if (percentInterval) {
+
+                clearInterval(percentInterval);
+                percentInterval = null;
+            }
+
+            loadingPercent.innerText = "100%";
+
+            setTimeout(() => {
+
+                loadingOverlay.style.opacity = '0';
+
+                setTimeout(() => {
+
+                    loadingOverlay.style.display = 'none';
+
+                }, 300);
+
+            }, 150);
+        }
+
+        video.addEventListener('waiting', showLoading);
+        video.addEventListener('seeking', showLoading);
+        video.addEventListener('playing', hideLoading);
+        video.addEventListener('canplay', hideLoading);
+
+        video.addEventListener('timeupdate', () => {
+
+            if (video.duration) {
+
+                let percent =
+                    (video.currentTime / video.duration) * 100;
+
+                progressBar.style.width =
+                    percent + '%';
+
+                timeDisplay.innerText =
+                    formatTime(video.currentTime) +
+                    " / " +
+                    formatTime(video.duration);
+
+                updateCinemaFoxSubtitle();
+            }
+        });
+
+        video.addEventListener('play', () => {
+
+            playPolygon.setAttribute(
+                'points',
+                '6,4 10,4 10,20 6,20 6,4 14,4 18,8 18,16 14,20 14,4'
+            );
+
+        });
+
+        video.addEventListener('pause', () => {
+
+            playPolygon.setAttribute(
+                'points',
+                '6,4 20,12 6,20'
+            );
+
+        });
+
+        function togglePlay() {
+
+            if (video.paused) {
+
+                video.play().catch(e => {});
+
+            } else {
+
+                video.pause();
+
+            }
+        }
+
+        function handleVideoContainerClick(e) {
+            togglePlay();
+        }
+
+        function toggleMute() {
+            video.muted = !video.muted;
+        }
+
+        function seekVideo(e) {
+
+            e.stopPropagation();
+
+            const rect =
+                e.currentTarget.getBoundingClientRect();
+
+            const pos =
+                (e.clientX - rect.left) /
+                rect.width;
+
+            video.currentTime =
+                pos * video.duration;
+
+            updateCinemaFoxSubtitle();
+        }
+
+        function formatTime(seconds) {
+
+            if (!isFinite(seconds))
+                return "0:00";
+
+            let h =
+                Math.floor(seconds / 3600);
+
+            let m =
+                Math.floor((seconds % 3600) / 60);
+
+            let s =
+                Math.floor(seconds % 60);
+
+            if (h > 0) {
+
+                return h + ":" +
+                    (m < 10 ? "0" : "") + m + ":" +
+                    (s < 10 ? "0" : "") + s;
+
+            } else {
+
+                return m + ":" +
+                    (s < 10 ? "0" : "") + s;
+
+            }
+        }
+
+        function toggleFullscreen() {
+
+            const container =
+                document.getElementById('videoContainer');
+
+            if (!document.fullscreenElement) {
+
+                container.requestFullscreen()
+                    .catch(err => {});
+
+            } else {
+
+                document.exitFullscreen();
+
+            }
+        }
+
+        function initPlayer() {
+
+            if (
+                typeof dramasData !== 'undefined' &&
+                dramasData.dramas
+            ) {
+
+                currentDramaData =
+                    dramasData.dramas.find(
+                        d => d.id === dramaId
+                    );
+
+                if (currentDramaData) {
+
+                    document.getElementById('dramaTitle').innerText =
+                        currentDramaData.title;
+
+                    populateSeasonsDropdown();
+
+                } else {
+
+                    fallbackMode();
+
+                }
+
+            } else {
+
+                fallbackMode();
+
+            }
+        }
+
+        function fallbackMode() {
+
+            document.getElementById('dramaTitle').innerText =
+                "عرض تجريبي";
+
+            mediaInfo.innerText =
+                "جاري التشغيل الان";
+
+            const seasonSelect =
+                document.getElementById('seasonSelect');
+
+            seasonSelect.innerHTML =
+                '<option value="season_1">الموسم الأول</option>';
+
+            const episodeSelect =
+                document.getElementById('episodeSelect');
+
+            episodeSelect.innerHTML =
+                '<option value="1">الحلقة 1</option>';
+
+            playStreamUrl(
+                "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            );
+
+            loadCinemaFoxSubtitles();
+        }
+
+        function populateSeasonsDropdown() {
+
+            const seasonSelect =
+                document.getElementById('seasonSelect');
+
+            seasonSelect.innerHTML = '';
+
+            Object.keys(
+                currentDramaData.seasons
+            ).forEach((seasonKey, index) => {
+
+                let option =
+                    document.createElement('option');
+
+                option.value =
+                    seasonKey;
+
+                option.innerText =
+                    `الموسم ${index + 1}`;
+
+                if (seasonKey === currentSeasonKey) {
+                    option.selected = true;
+                }
+
+                seasonSelect.appendChild(option);
+
+            });
+
+            populateEpisodesDropdown();
+        }
+
+        function populateEpisodesDropdown() {
+
+            const episodeSelect =
+                document.getElementById('episodeSelect');
+
+            episodeSelect.innerHTML = '';
+
+            const seasonData =
+                currentDramaData.seasons[currentSeasonKey];
+
+            if (
+                seasonData &&
+                seasonData.episodes
+            ) {
+
+                Object.keys(
+                    seasonData.episodes
+                )
+                .sort((a, b) => Number(a) - Number(b))
+                .forEach(epNum => {
+
+                    let option =
+                        document.createElement('option');
+
+                    option.value =
+                        epNum;
+
+                    option.innerText =
+                        `الحلقة ${epNum}`;
+
+                    if (epNum === currentEpNum) {
+                        option.selected = true;
+                    }
+
+                    episodeSelect.appendChild(option);
+
+                });
+            }
+
+            loadVideoSource();
+        }
+
+        function loadVideoSource() {
+
+            if (!currentDramaData)
+                return;
+
+            const seasonData =
+                currentDramaData.seasons[currentSeasonKey];
+
+            if (
+                seasonData &&
+                seasonData.episodes &&
+                seasonData.episodes[currentEpNum]
+            ) {
+
+                const videoUrl =
+                    seasonData.episodes[currentEpNum];
+
+                showLoading();
+
+                video.pause();
+                video.removeAttribute('src');
+
+                if (hlsInstance) {
+
+                    try {
+                        hlsInstance.destroy();
+                    } catch (e) {}
+
+                    hlsInstance = null;
+                }
+
+                mediaInfo.innerText =
+                    `جاري تشغيل: موسم ${currentSeasonKey} - حلقة ${currentEpNum}`;
+
+                subtitleBox.innerText = "";
+                subtitleBox.style.display = "none";
+
+                loadCinemaFoxSubtitles();
+
+                playStreamUrl(videoUrl);
+
+            } else {
+
+                mediaInfo.innerText =
+                    "عذراً، رابط هذه الحلقة غير متوفر حالياً.";
+
+                hideLoading();
+
+                video.src = "";
+
+                subtitleItems = [];
+                subtitleBox.innerText = "";
+                subtitleBox.style.display = "none";
+            }
+        }
+
+        function playStreamUrl(url) {
+
+            if (!url)
+                return;
+
+            if (url.includes('.m3u8')) {
+
+                if (
+                    video.canPlayType(
+                        'application/vnd.apple.mpegurl'
+                    )
+                ) {
+
+                    video.src = url;
+                    video.load();
+
+                    video.addEventListener(
+                        'loadedmetadata',
+                        function startNativeVideo() {
+
+                            video.removeEventListener(
+                                'loadedmetadata',
+                                startNativeVideo
+                            );
+
+                            video.play().catch(e =>
+                                hideLoading()
+                            );
+
+                        }
+                    );
+
+                } else if (Hls.isSupported()) {
+
+                    if (hlsInstance) {
+
+                        try {
+                            hlsInstance.destroy();
+                        } catch (e) {}
+
+                    }
+
+                    const hlsConfig = {
+
+                        startLevel: -1,
+                        capLevelToPlayerSize: false,
+                        maxBufferLength: 30,
+                        maxMaxBufferLength: 60
+
+                    };
+
+                    hlsInstance =
+                        new Hls(hlsConfig);
+
+                    hlsInstance.loadSource(url);
+
+                    hlsInstance.attachMedia(video);
+
+                    hlsInstance.on(
+                        Hls.Events.MANIFEST_PARSED,
+                        () => {
+
+                            document
+                                .querySelectorAll('.quality-option')
+                                .forEach(el =>
+                                    el.classList.remove('selected')
+                                );
+
+                            video.play().catch(e => {
+                                hideLoading();
+                            });
+
+                        }
+                    );
+
+                    hlsInstance.on(
+                        Hls.Events.ERROR,
+                        (event, data) => {
+
+                            if (data.fatal) {
+
+                                switch (data.type) {
+
+                                    case Hls.ErrorTypes.NETWORK_ERROR:
+
+                                        hlsInstance.startLoad();
+                                        break;
+
+                                    case Hls.ErrorTypes.MEDIA_ERROR:
+
+                                        hlsInstance.recoverMediaError();
+                                        break;
+
+                                    default:
+
+                                        hlsInstance.destroy();
+                                        break;
+                                }
+                            }
+                        }
+                    );
+                }
+
+            } else {
+
+                video.src = url;
+                video.load();
+
+                video.addEventListener(
+                    'loadedmetadata',
+                    function startMp4Video() {
+
+                        video.removeEventListener(
+                            'loadedmetadata',
+                            startMp4Video
+                        );
+
+                        video.play().catch(e =>
+                            hideLoading()
+                        );
+
+                    }
+                );
+            }
+        }
+
+        function setQuality(selectedVal, btnElement) {
+
+            document
+                .querySelectorAll('.quality-option')
+                .forEach(el =>
+                    el.classList.remove('selected')
+                );
+
+            btnElement.classList.add('selected');
+
+            qualityMenu.classList.remove('active');
+
+            if (!hlsInstance)
+                return;
+
+            if (selectedVal === 'auto') {
+
+                hlsInstance.currentLevel = -1;
+
+            } else {
+
+                let targetHeight =
+                    parseInt(selectedVal);
+
+                let levels =
+                    hlsInstance.levels;
+
+                let bestLevelIndex = -1;
+                let minDiff = 9999;
+
+                for (
+                    let i = 0;
+                    i < levels.length;
+                    i++
+                ) {
+
+                    let diff =
+                        Math.abs(
+                            levels[i].height -
+                            targetHeight
+                        );
+
+                    if (diff < minDiff) {
+
+                        minDiff = diff;
+                        bestLevelIndex = i;
+
+                    }
+                }
+
+                if (bestLevelIndex !== -1) {
+
+                    hlsInstance.currentLevel =
+                        bestLevelIndex;
+
+                }
+            }
+        }
+
+        function changeSeason() {
+
+            currentSeasonKey =
+                document.getElementById(
+                    'seasonSelect'
+                ).value;
+
+            currentEpNum = '1';
+
+            populateEpisodesDropdown();
+        }
+
+        function changeEpisode() {
+
+            currentEpNum =
+                document.getElementById(
+                    'episodeSelect'
+                ).value;
+
+            loadVideoSource();
+        }
+
+        function nextEpisode() {
+
+            if (!currentDramaData)
+                return;
+
+            let nextEp =
+                (
+                    parseInt(currentEpNum) + 1
+                ).toString();
+
+            const sData =
+                currentDramaData.seasons[
+                    currentSeasonKey
+                ];
+
+            if (
+                sData &&
+                sData.episodes &&
+                sData.episodes[nextEp]
+            ) {
+
+                currentEpNum = nextEp;
+
+                document.getElementById(
+                    'episodeSelect'
+                ).value = currentEpNum;
+
+                loadVideoSource();
+
+            } else {
+
+                alert(
+                    "هذه هي الحلقة الأخيرة في هذا الموسم!"
+                );
+
+            }
+        }
+
+        function goHome() {
+            window.location.href = "index.html";
+        }
+
+
+        /* =====================================================
+           CINEMA FOX - AB.JS SUBTITLE SYSTEM
+
+           GitHub Release
+                ↓
+           Vercel Proxy
+                ↓
+           VTT
+           ===================================================== */
+
+        function getSubtitleUrl() {
+
+            if (
+                typeof subtitlesData === 'undefined' ||
+                !subtitlesData.dramas
+            ) {
+
+                console.error(
+                    "ab.js غير موجود أو لم يتم تحميله"
+                );
+
+                return null;
+            }
+
+            if (!currentDramaData) {
+                return null;
+            }
+
+            let subtitleDrama =
+                subtitlesData.dramas.find(
+                    item =>
+                        String(item.id).toLowerCase() ===
+                        String(dramaId).toLowerCase()
+                );
+
+            if (!subtitleDrama) {
+
+                subtitleDrama =
+                    subtitlesData.dramas.find(
+                        item =>
+                            String(item.title)
+                                .trim()
+                                .toLowerCase() ===
+                            String(currentDramaData.title)
+                                .trim()
+                                .toLowerCase()
+                    );
+            }
+
+            if (!subtitleDrama) {
+
+                console.warn(
+                    "لم يتم العثور على ترجمة للمسلسل:",
+                    currentDramaData.title
+                );
+
+                return null;
+            }
+
+            const seasonData =
+                subtitleDrama.seasons?.[currentSeasonKey];
+
+            if (!seasonData) {
+
+                console.warn(
+                    "لم يتم العثور على ترجمة للموسم:",
+                    currentSeasonKey,
+                    "للمسلسل:",
+                    subtitleDrama.title
+                );
+
+                return null;
+            }
+
+            const originalUrl =
+                seasonData.episodes?.[
+                    String(currentEpNum)
+                ];
+
+            if (!originalUrl) {
+
+                console.warn(
+                    "لم يتم العثور على ترجمة للحلقة:",
+                    currentEpNum,
+                    "للمسلسل:",
+                    subtitleDrama.title,
+                    "الموسم:",
+                    currentSeasonKey
+                );
+
+                return null;
+            }
 
             return (
-                "https://raw.githubusercontent.com/moanahabhahaha-debug/new4/main/subtitles/" +
-                encodeURIComponent(releaseTag) +
-                "/" +
-                fileName
+                "https://cinamafox.vercel.app/api/subtitle?url=" +
+                encodeURIComponent(originalUrl)
             );
         }
 
-    } catch (error) {
 
-        console.error("Subtitle URL Error:", error);
+        async function loadCinemaFoxSubtitles() {
 
-    }
+            const requestId =
+                ++subtitleRequestId;
 
-    return null;
-}
+            subtitleItems = [];
+
+            subtitleBox.innerText = "";
+            subtitleBox.style.display = "none";
+
+            const subtitleUrl =
+                getSubtitleUrl();
+
+            if (!subtitleUrl) {
+                return;
+            }
+
+            console.log(
+                "🎬 رابط الترجمة عبر Proxy:",
+                subtitleUrl
+            );
+
+            try {
+
+                const response =
+                    await fetch(
+                        subtitleUrl,
+                        {
+                            method: "GET",
+                            cache: "no-cache"
+                        }
+                    );
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        "Subtitle HTTP " +
+                        response.status
+                    );
+                }
+
+                const vttText =
+                    await response.text();
+
+                if (
+                    requestId !== subtitleRequestId
+                ) {
+                    return;
+                }
+
+                subtitleItems =
+                    parseVTT(vttText);
+
+                console.log(
+                    "✅ تم تحميل الترجمة:",
+                    subtitleItems.length,
+                    "سطر"
+                );
+
+                updateCinemaFoxSubtitle();
+
+            } catch (error) {
+
+                console.error(
+                    "CinemaFox Subtitle Error:",
+                    error
+                );
+
+                subtitleItems = [];
+            }
+        }
+
+
+        function parseVTT(text) {
+
+            text =
+                text.replace(/\r/g, '');
+
+            text =
+                text.replace(
+                    /^WEBVTT[^\n]*\n/i,
+                    ''
+                );
+
+            const blocks =
+                text.split(/\n\s*\n/);
+
+            const result = [];
+
+            for (const block of blocks) {
+
+                const lines =
+                    block.split('\n');
+
+                let timeLineIndex = -1;
+
+                for (
+                    let i = 0;
+                    i < lines.length;
+                    i++
+                ) {
+
+                    if (
+                        lines[i].includes('-->')
+                    ) {
+
+                        timeLineIndex = i;
+                        break;
+                    }
+                }
+
+                if (timeLineIndex === -1)
+                    continue;
+
+                const times =
+                    lines[timeLineIndex]
+                        .split('-->');
+
+                if (times.length < 2)
+                    continue;
+
+                const start =
+                    vttTimeToSeconds(
+                        times[0].trim()
+                    );
+
+                const end =
+                    vttTimeToSeconds(
+                        times[1]
+                            .trim()
+                            .split(/\s+/)[0]
+                    );
+
+                if (
+                    !isFinite(start) ||
+                    !isFinite(end)
+                ) {
+                    continue;
+                }
+
+                const textLines =
+                    lines.slice(
+                        timeLineIndex + 1
+                    );
+
+                const subtitleText =
+                    textLines
+                        .join('\n')
+                        .replace(
+                            /<[^>]*>/g,
+                            ''
+                        )
+                        .trim();
+
+                if (!subtitleText)
+                    continue;
+
+                result.push({
+                    start: start,
+                    end: end,
+                    text: subtitleText
+                });
+            }
+
+            return result;
+        }
+
+
+        function vttTimeToSeconds(time) {
+
+            time =
+                time.replace(',', '.');
+
+            const parts =
+                time.split(':');
+
+            if (parts.length === 2) {
+
+                const minutes =
+                    parseFloat(parts[0]);
+
+                const seconds =
+                    parseFloat(parts[1]);
+
+                return (
+                    minutes * 60 +
+                    seconds
+                );
+            }
+
+            if (parts.length === 3) {
+
+                const hours =
+                    parseFloat(parts[0]);
+
+                const minutes =
+                    parseFloat(parts[1]);
+
+                const seconds =
+                    parseFloat(parts[2]);
+
+                return (
+                    hours * 3600 +
+                    minutes * 60 +
+                    seconds
+                );
+            }
+
+            return NaN;
+        }
+
+
+        function updateCinemaFoxSubtitle() {
+
+            if (
+                !subtitleItems.length ||
+                !isFinite(video.currentTime)
+            ) {
+
+                subtitleBox.innerText = "";
+                subtitleBox.style.display = "none";
+
+                return;
+            }
+
+            const currentTime =
+                video.currentTime;
+
+            let activeSubtitle = null;
+
+            for (
+                let i = 0;
+                i < subtitleItems.length;
+                i++
+            ) {
+
+                const item =
+                    subtitleItems[i];
+
+                if (
+                    currentTime >= item.start &&
+                    currentTime <= item.end
+                ) {
+
+                    activeSubtitle = item;
+                    break;
+                }
+
+                if (
+                    item.start > currentTime
+                ) {
+
+                    break;
+                }
+            }
+
+            if (activeSubtitle) {
+
+                subtitleBox.innerText =
+                    activeSubtitle.text;
+
+                subtitleBox.style.display =
+                    "block";
+
+            } else {
+
+                subtitleBox.innerText = "";
+
+                subtitleBox.style.display =
+                    "none";
+            }
+        }
+
+    </script>
+
+</body>
+</html>
